@@ -1,0 +1,6 @@
+transformers
+accelerate
+sentencepiece
+langdetect
+pandas
+tqdm

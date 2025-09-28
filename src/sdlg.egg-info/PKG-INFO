@@ -1,0 +1,16 @@
+Metadata-Version: 2.4
+Name: sdlg
+Version: 0.0.1
+Summary: Synthetic Data Local Generator (local/colab-ready)
+Author: Your Name
+License: Commercial
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: transformers
+Requires-Dist: accelerate
+Requires-Dist: sentencepiece
+Requires-Dist: langdetect
+Requires-Dist: pandas
+Requires-Dist: tqdm
+
+# sdlg

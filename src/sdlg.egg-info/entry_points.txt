@@ -1,0 +1,2 @@
+[console_scripts]
+sdlg = sdlg.cli:main

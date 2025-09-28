@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+src/sdlg/__init__.py
+src/sdlg/cli.py
+src/sdlg/generator.py
+src/sdlg.egg-info/PKG-INFO
+src/sdlg.egg-info/SOURCES.txt
+src/sdlg.egg-info/dependency_links.txt
+src/sdlg.egg-info/entry_points.txt
+src/sdlg.egg-info/requires.txt
+src/sdlg.egg-info/top_level.txt
