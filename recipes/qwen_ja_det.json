@@ -1,0 +1,8 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "chat": true,
+  "lang": "ja",
+  "max_new_tokens": 120,
+  "deterministic": true,
+  "n_per_prompt": 1
+}
