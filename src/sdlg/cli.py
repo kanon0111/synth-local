@@ -19,6 +19,7 @@ def cmd_run(args):
         chat=args.chat,
         system_text=args.system,
         seed=args.seed,
+        deterministic=args.deterministic,
     )
     rows = gen.generate(prompts, n_per_prompt=args.n_per_prompt)
     pd.DataFrame(rows).to_csv(args.out, index=False, encoding="utf-8-sig")
@@ -50,6 +51,7 @@ def main():
     r.add_argument("--temperature", type=float, default=0.8)
     r.add_argument("--top_p", type=float, default=0.9)
     r.add_argument("--seed", type=int, default=None, help="乱数シード（再現性用）")
+    r.add_argument("--deterministic", action="store_true", help="完全再現モード（greedy）")
     r.add_argument("--out", default="outputs/synthetic.csv")
     r.add_argument("--report", default="outputs/report.json")
     r.set_defaults(func=cmd_run)
