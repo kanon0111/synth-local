@@ -1,61 +1,101 @@
 # Synthetic Data Local Generator (sdlg)
 
-ローカル/Colabで動く **合成テキスト生成 → 品質チェック → 保存** の CLI ツール（MVP）。
+ローカル / Colab で動く **合成テキスト生成 → 品質チェック → 保存** の CLI ツール（MVP）。
 
-## 要件
-- Python 3.10+
-- PyTorch（環境に応じてインストール）
+---
+
+## 主な機能
+- 生成バックエンド：Hugging Face Transformers（完全ローカル推論 / 外部API不要）
+- モード：**free-form**（続き書き） / **chat**（指示追従モデル向け）
+- 品質レポ v1：**言語一致**・**長さ統計**・**5-gram重複率**・**簡易毒性**・**簡易PII検出**
+- 出力：**CSV**（`prompt, response`）＋ **JSON**（品質集計）
+
+---
+
+## 必要要件
+- Python **3.10+**
+- PyTorch（CPU でも可。GPU を使う環境では CUDA 版を各自の環境に合わせて導入）
+
+---
 
 ## インストール（開発用）
 ```powershell
+# 仮想環境の作成と有効化（Windows PowerShell の例）
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+
+# sdlg を開発インストール
 pip install --upgrade pip
 pip install -e .
-PyTorch の導入例（CPUテスト）
+```
 
-powershell
-コードをコピーする
+### PyTorch の導入例
+- **CPU テスト用（簡易）**
+```powershell
 pip install --upgrade torch --index-url https://download.pytorch.org/whl/cpu
-使い方（CLI）
-1行=1プロンプトのテキストファイルを用意します：
+```
+- **GPU（CUDA）**  
+  お使いの CUDA / OS / Python に応じたコマンドでインストールしてください（PyTorch 公式の “Get Started” で発行されるコマンド推奨）。
 
-text
-コードをコピーする
+---
+
+## 使い方（CLI）
+
+### 1) プロンプトファイルを用意（1行 = 1プロンプト）
+```text
 顧客からの問い合わせ: 返品は可能ですか？ 店舗とオンラインの違いも教えてください。
 顧客からの問い合わせ: 配送はどれくらいかかりますか？ 地域別の目安も含めてください。
-生成→品質レポ→保存を1コマンドで実行：
+```
 
-powershell
-コードをコピーする
-sdlg run --prompts .\prompts.txt -n 1 --model distilgpt2 --lang ja --max-new-tokens 60 --out outputs\synthetic.csv --report outputs\report.json
-指示追従モデル（Colab/GPU推奨）
-bash
-コードをコピーする
-sdlg run --prompts prompts.txt -n 2 --model "Qwen/Qwen2.5-1.5B-Instruct" --chat --lang ja --max-new-tokens 120
-出力
-CSV: outputs/synthetic.csv（prompt, response 形式）
+### 2) 生成 → 品質レポ → 保存を 1 コマンド
+```powershell
+sdlg run --prompts .\prompts.txt -n 1 ^
+  --model distilgpt2 --lang ja --max-new-tokens 60 ^
+  --out outputs\synthetic.csv --report outputs\report.json
+```
 
-JSON: outputs/report.json（品質レポ v1 の集計）
+### 3) 指示追従モデル（Colab/GPU 推奨）
+```powershell
+sdlg run --prompts .\prompts.txt -n 2 ^
+  --model "Qwen/Qwen2.5-1.5B-Instruct" --chat --lang ja --max-new-tokens 120
+```
 
-機能（現状）
-生成：Transformers によるローカル推論（API不要）／free-form と chat モード
+---
 
-品質レポ v1：言語一致、長さ統計、5-gram重複率、簡易毒性、簡易PII検出
+## 出力物
+- **`outputs/synthetic.csv`** … 生成データセット（`prompt, response`）
+- **`outputs/report.json`** … 品質レポ v1（集計値 + 合否）
 
-プロジェクト構成
-bash
-コードをコピーする
+---
+
+## プロジェクト構成
+```text
 src/sdlg/
   __init__.py
-  cli.py        # sdlg コマンド
-  generator.py  # 生成（free-form / chat）
-  quality.py    # 品質レポ v1
-今後の予定
-レシピ保存・再現（seed / params / model）
+  cli.py        # sdlg コマンド（生成→品質→保存）
+  generator.py  # 生成ロジック（free-form / chat）
+  quality.py    # 品質レポ v1（言語/重複/毒性/PII など）
+```
 
-並列実行・スケジューラ
+---
 
-SFT/RAGフォーマット出力、しきい値のCLI化
+## よくある質問
+- **出力が“質問の繰り返し”になる**  
+  → `distilgpt2` など通常の GPT2 系は続き書き用です。Q&A には `--chat` と Instruct 系モデル（例：`Qwen2.5-1.5B-Instruct`）を使用してください。  
+- **遅い / 量を捌けない**  
+  → GPU 環境（Colab など）で実行し、`--max-new-tokens` を必要十分に抑えると改善します。
 
-Streamlit UI
+---
+
+## 今後の予定
+- レシピ保存・再現（model / params / seed）
+- 並列実行・優先度付き再生成
+- SFT / RAG 用フォーマット出力
+- しきい値の CLI オプション化
+- 簡易 UI（Streamlit）
+
+---
+
+## ライセンス / 注意
+- 本ツールは生成データの**利用結果の責任を利用者が負う**前提です。個人情報・名指しなどの混入にはご注意ください。
+- 使用する各モデル・データセットの**ライセンス/利用規約**を必ず確認のうえご利用ください。

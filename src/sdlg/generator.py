@@ -49,32 +49,29 @@ class TextGenerator:
         self.top_p = top_p
 
     def _gen_args(self):
-        # 再現モードなら greedy（do_sample=False, temperature無効）
+        base = dict(
+            max_new_tokens=self.max_new_tokens,
+            min_new_tokens=1,  # ←最低1トークンは生成
+            pad_token_id=self.tok.pad_token_id,
+            eos_token_id=self.tok.eos_token_id,
+        )
         if self.deterministic:
-            return dict(
-                max_new_tokens=self.max_new_tokens,
-                do_sample=False,
-                pad_token_id=self.tok.pad_token_id,
-                eos_token_id=self.tok.eos_token_id,
-            )
+            base.update(dict(do_sample=False))
         else:
-            return dict(
-                max_new_tokens=self.max_new_tokens,
-                do_sample=True,
-                temperature=self.temperature,
-                top_p=self.top_p,
-                pad_token_id=self.tok.pad_token_id,
-                eos_token_id=self.tok.eos_token_id,
-            )
+            base.update(dict(do_sample=True, temperature=self.temperature, top_p=self.top_p))
+        return base
 
     def _gen_freeform(self, prompt: str) -> str:
         enc = self.tok(prompt, return_tensors="pt")
         dev = getattr(self.model, "device", next(self.model.parameters()).device)
         enc = {k: v.to(dev) for k, v in enc.items()}
+
         with torch.inference_mode():
             out = self.model.generate(**enc, **self._gen_args())
-        text = self.tok.decode(out[0], skip_special_tokens=True)
-        return text[len(prompt):].strip() if text.startswith(prompt) else text.strip()
+        # 入力トークン数でスライスして「新規生成分」だけ取り出す
+        new_ids = out[:, enc["input_ids"].shape[1]:]
+        text = self.tok.batch_decode(new_ids, skip_special_tokens=True)[0].strip()
+        return text
 
     def _gen_chat(self, user_text: str) -> str:
         msgs = [{"role": "system", "content": self.system_text},
