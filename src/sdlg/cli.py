@@ -1,4 +1,4 @@
-import argparse, sys, json, os, csv, datetime as dt
+import argparse, sys, json, os, csv
 
 def _read_prompts(path: str):
     with open(path, encoding="utf-8") as f:
@@ -34,6 +34,7 @@ def main(argv=None):
     run.add_argument("--deterministic", action="store_true")
     run.add_argument("-n", "--n-per-prompt", type=int, default=1)
     run.add_argument("--lang", default="ja", help="Target language for quality report (ja/en, etc.)")
+    run.add_argument("--print-config", action="store_true", help="print effective config and exit")
 
     def _cmd_run(args):
         # lazy imports so that `--help` is instant
@@ -51,19 +52,24 @@ def main(argv=None):
         os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
         os.makedirs(os.path.dirname(args.report) or ".", exist_ok=True)
 
-        # merge effective config (recipe has priority)
+        # effective config (recipe has priority over CLI)
         eff = {
-            "model_id":      cfg.get("model") or args.model or "distilgpt2",
-            "chat":          cfg.get("chat") if "chat" in cfg else args.chat,
-            "system_text":   cfg.get("system") if "system" in cfg else args.system,
-            "max_new_tokens":cfg.get("max_new_tokens") if "max_new_tokens" in cfg else (args.max_new_tokens if args.max_new_tokens is not None else 64),
-            "temperature":   cfg.get("temperature") if "temperature" in cfg else (args.temperature if args.temperature is not None else 0.8),
-            "top_p":         cfg.get("top_p") if "top_p" in cfg else (args.top_p if args.top_p is not None else 0.9),
-            "seed":          cfg.get("seed") if "seed" in cfg else args.seed,
-            "deterministic": cfg.get("deterministic") if "deterministic" in cfg else args.deterministic,
-            "n_per_prompt":  cfg.get("n_per_prompt", args.n_per_prompt),
-            "lang":          cfg.get("lang", args.lang),
+            "model_id":       cfg.get("model") or args.model or "distilgpt2",
+            "chat":           (cfg["chat"] if "chat" in cfg else args.chat),
+            "system_text":    (cfg["system"] if "system" in cfg else args.system),
+            "max_new_tokens": (cfg["max_new_tokens"] if "max_new_tokens" in cfg else (args.max_new_tokens if args.max_new_tokens is not None else 64)),
+            "temperature":    (cfg["temperature"] if "temperature" in cfg else (args.temperature if args.temperature is not None else 0.8)),
+            "top_p":          (cfg["top_p"] if "top_p" in cfg else (args.top_p if args.top_p is not None else 0.9)),
+            "seed":           (cfg["seed"] if "seed" in cfg else args.seed),
+            "deterministic":  (cfg["deterministic"] if "deterministic" in cfg else args.deterministic),
+            "n_per_prompt":   cfg.get("n_per_prompt", args.n_per_prompt),
+            "lang":           cfg.get("lang", args.lang),
         }
+
+        # --print-config: show and exit
+        if args.print_config:
+            print(json.dumps(eff, ensure_ascii=False, indent=2))
+            return 0
 
         # build generator
         gen = TextGenerator(
@@ -82,7 +88,6 @@ def main(argv=None):
 
         # write CSV (UTF-8 with BOM)
         fieldnames = ["prompt", "response"]
-        # include optional diagnostics if present
         if rows and isinstance(rows[0], dict):
             fieldnames = sorted(set().union(*[r.keys() for r in rows]))
         with open(args.out, "w", encoding="utf-8-sig", newline="") as f:
