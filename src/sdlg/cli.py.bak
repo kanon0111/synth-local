@@ -1,4 +1,5 @@
-import argparse, os, json, pandas as pd
+import argparse, sys, json, os, csv, datetime as dt
+
 def _read_prompts(path: str):
     with open(path, encoding="utf-8") as f:
         return [l.strip() for l in f if l.strip()]
@@ -7,72 +8,123 @@ def _load_recipe(path: str):
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
-def cmd_run(args):
-    # lazy imports to make --help instant
-    from sdlg.generator import TextGenerator
-    from sdlg.quality import summarize_quality, pass_fail
-    cfg = _load_recipe(args.recipe) if args.recipe else {}
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="sdlg", description="Synthetic Data Local Generator")
+    sub = parser.add_subparsers(dest="cmd")
 
-    prompts = _read_prompts(args.prompts)
-    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
-    os.makedirs(os.path.dirname(args.report) or ".", exist_ok=True)
+    # ping
+    ping = sub.add_parser("ping", help="quick responsiveness check")
+    ping.set_defaults(func=lambda a: print("pong"))
 
-    gen = TextGenerator(
-        model_id=cfg.get("model", args.model),
-        max_new_tokens=cfg.get("max_new_tokens", args.max_new_tokens),
-        temperature=cfg.get("temperature", args.temperature),
-        top_p=cfg.get("top_p", args.top_p),
-        chat=cfg.get("chat", args.chat),
-        system_text=cfg.get("system", args.system),
-        seed=cfg.get("seed", args.seed),
-        deterministic=cfg.get("deterministic", args.deterministic),
-    )
-    n_per_prompt = cfg.get("n_per_prompt", args.n_per_prompt)
-    lang = cfg.get("lang", args.lang)
+    # run
+    run = sub.add_parser("run", help="Generate -> Quality -> Save")
+    run.add_argument("--prompts", required=True, help="UTF-8 text file, one prompt per line")
+    run.add_argument("--recipe", help="JSON recipe path (overrides CLI flags)")
+    run.add_argument("--out", default="outputs/synthetic.csv")
+    run.add_argument("--report", default="outputs/report.json")
 
-    rows = gen.generate(prompts, n_per_prompt=n_per_prompt)
-    pd.DataFrame(rows).to_csv(args.out, index=False, encoding="utf-8-sig")
+    # generation flags
+    run.add_argument("--model", help="HF model id (e.g., distilgpt2)")
+    run.add_argument("--chat", action="store_true", help="Use chat/instruct mode")
+    run.add_argument("--system", help="System prompt (chat mode only)")
+    run.add_argument("--max-new-tokens", type=int, help="Max new tokens")
+    run.add_argument("--temperature", type=float)
+    run.add_argument("--top_p", type=float)
+    run.add_argument("--seed", type=int)
+    run.add_argument("--deterministic", action="store_true")
+    run.add_argument("-n", "--n-per-prompt", type=int, default=1)
+    run.add_argument("--lang", default="ja", help="Target language for quality report (ja/en, etc.)")
 
-    responses = [r["response"] for r in rows]
-    rep = summarize_quality(responses, target_lang=lang)
-    gates = pass_fail(rep)
-    with open(args.report, "w", encoding="utf-8") as f:
-        json.dump({"report": rep, "pass_fail": gates}, f, ensure_ascii=False, indent=2)
+    def _cmd_run(args):
+        # lazy imports
+        from sdlg.generator import TextGenerator
+        from sdlg.quality import summarize_quality, pass_fail
 
-    print(f"\nSaved dataset : {args.out}")
-    print(f"Saved report  : {args.report}")
-    print("\nQuality report:")
-    print(json.dumps(rep, ensure_ascii=False, indent=2))
-    print("Pass/Fail:", gates)
+        def _eff(args, cfg):
+            return {
+                "model_id":       (cfg.get("model") or args.model or "distilgpt2"),
+                "chat":           (cfg["chat"] if "chat" in cfg else args.chat),
+                "system_text":    (cfg["system"] if "system" in cfg else args.system),
+                "max_new_tokens": (cfg["max_new_tokens"] if "max_new_tokens" in cfg else (args.max_new_tokens if args.max_new_tokens is not None else 64)),
+                "temperature":    (cfg["temperature"] if "temperature" in cfg else (args.temperature if args.temperature is not None else 0.8)),
+                "top_p":          (cfg["top_p"] if "top_p" in cfg else (args.top_p if args.top_p is not None else 0.9)),
+                "seed":           (cfg["seed"] if "seed" in cfg else args.seed),
+                "deterministic":  (cfg["deterministic"] if "deterministic" in cfg else args.deterministic),
+                "n_per_prompt":   (cfg.get("n_per_prompt", args.n_per_prompt)),
+                "lang":           (cfg.get("lang", args.lang)),
+            }        # lazy imports so that `--help` is instant
+        from sdlg.generator import TextGenerator
+        from sdlg.quality import summarize_quality, pass_fail
 
-    # ・・・中略（あなたの貼った内容そのまま）・・・
-    
-    def main():
-        p = argparse.ArgumentParser(prog="sdlg", description="Synthetic Data Local Generator CLI")
-        sp = p.add_subparsers(dest="cmd", required=True)
-    
-        r = sp.add_parser("run", help="Generate -> Quality -> Save")
-        r.add_argument("--prompts", required=True, help="1行=1プロンプトのUTF-8テキスト")
-        r.add_argument("-n", "--n-per-prompt", type=int, default=1)
-        r.add_argument("--model", default="distilgpt2", help="HF model id")
-        r.add_argument("--chat", action="store_true", help="Instruct/Chatモデルを使用")
-        r.add_argument("--system", default="あなたは丁寧な日本語で答えるカスタマーサポート担当者です。")
-        r.add_argument("--lang", default="ja", help="品質レポの言語判定ターゲット（ja/enなど）")
-        r.add_argument("--max-new-tokens", type=int, default=120)
-        r.add_argument("--temperature", type=float, default=0.8)
-        r.add_argument("--top_p", type=float, default=0.9)
-        r.add_argument("--seed", type=int, default=None, help="乱数シード（再現性用）")
-        r.add_argument("--deterministic", action="store_true", help="完全再現モード（greedy）")
-        r.add_argument("--out", default="outputs/synthetic.csv")
-        r.add_argument("--report", default="outputs/report.json")
-        r.add_argument("--recipe", help="JSONレシピファイル（指定すると各オプションを上書き）")
-        r.set_defaults(func=cmd_run)
-    
-        args = p.parse_args()
-        args.func(args)
-    
-    if __name__ == "__main__":
-        main()
+        # load recipe if any (recipe overrides CLI flags)
+        cfg = {}
+        if args.recipe:
+            cfg = _load_recipe(args.recipe)
 
+        prompts = _read_prompts(args.prompts)
+
+        # ensure dirs
+        os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
+        os.makedirs(os.path.dirname(args.report) or ".", exist_ok=True)
+
+        # merge effective config (recipe has priority)
+                eff = _eff(args, cfg)
+
+        # --print-config: 設定だけ表示して終了
+        if args.print_config:
+            import json as _json
+            print(_json.dumps(eff, ensure_ascii=False, indent=2))
+            return 0
+
+        # build generator
+        gen = TextGenerator(
+            model_id=eff["model_id"],
+            max_new_tokens=eff["max_new_tokens"],
+            temperature=eff["temperature"],
+            top_p=eff["top_p"],
+            chat=eff["chat"],
+            system_text=eff["system_text"],
+            seed=eff["seed"],
+            deterministic=eff["deterministic"],
+        )
+
+        # generate
+        rows = gen.generate(prompts, n_per_prompt=eff["n_per_prompt"])
+
+        # write CSV (UTF-8 with BOM)
+        fieldnames = ["prompt", "response"]
+        # include optional diagnostics if present
+        if rows and isinstance(rows[0], dict):
+            fieldnames = sorted(set().union(*[r.keys() for r in rows]))
+        with open(args.out, "w", encoding="utf-8-sig", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=fieldnames)
+            w.writeheader()
+            for r in rows:
+                w.writerow(r)
+
+        # quality
+        responses = [r.get("response", "") for r in rows]
+        report = summarize_quality(responses, target_lang=eff["lang"])
+        gates = pass_fail(report)
+        with open(args.report, "w", encoding="utf-8") as f:
+            json.dump({"report": report, "pass_fail": gates}, f, ensure_ascii=False, indent=2)
+
+        print("Saved dataset :", args.out)
+        print("Saved report  :", args.report)
+        print("Quality report:")
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        print("Pass/Fail:", gates)
+        return 0
+
+    run.set_defaults(func=_cmd_run)
+
+    args = parser.parse_args(argv)
+    if args.cmd is None:
+        parser.print_help()
+        return 0
+    return args.func(args) or 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 
 

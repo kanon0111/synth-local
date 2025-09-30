@@ -51,7 +51,8 @@ pip install --upgrade torch --index-url https://download.pytorch.org/whl/cpu
 ```powershell
 sdlg run --prompts .\prompts.txt -n 1 ^
   --model distilgpt2 --lang ja --max-new-tokens 60 ^
-  --out outputs\synthetic.csv --report outputs\report.json
+  --out outputs\synthetic.csv --report outputs\r
+eport.json
 ```
 
 ### 3) 指示追従モデル（Colab/GPU 推奨）
@@ -99,3 +100,62 @@ src/sdlg/
 ## ライセンス / 注意
 - 本ツールは生成データの**利用結果の責任を利用者が負う**前提です。個人情報・名指しなどの混入にはご注意ください。
 - 使用する各モデル・データセットの**ライセンス/利用規約**を必ず確認のうえご利用ください。
+
+## Run with a recipe
+
+```bash
+sdlg run --recipe recipes/qwen_ja_det.json --prompts examples/prompts_ja.txt
+```
+
+- CLI フラグも併用できるが、**レシピの値が優先して上書き**される  
+- レシピを使うと「同じ条件での再現実行」が簡単になる  
+- 最小レシピ例:
+
+```json
+{
+  "model": "Qwen2.5-1.5B-Instruct",
+  "chat": true,
+  "deterministic": true
+}
+```
+## Run on Google Colab (GPU/T4 recommended)
+
+```bash
+# 1) Install (upload the wheel to Colab Files pane or use a URL)
+pip install "https://github.com/<owner>/<repo>/releases/download/v0.1.1/sdlg-0.1.1-py3-none-any.whl"
+
+# 2) Prepare recipe & prompts
+mkdir -p /content/recipes /content/examples /content/outputs
+
+cat << 'JSON' > /content/recipes/qwen_ja_det.json
+{
+  "schema_version": "1",
+  "model": "Qwen2.5-1.5B-Instruct",
+  "chat": true,
+  "max_new_tokens": 512,
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "deterministic": true,
+  "seed": 42,
+  "system": "You are a helpful Japanese assistant.",
+  "n_per_prompt": 8,
+  "lang": "ja"
+}
+JSON
+
+cat << 'TXT' > /content/examples/prompts_ja.txt
+テスト用の短い質問です。1文で答えてください。
+TXT
+
+# 3) Run
+sdlg run \
+  --recipe /content/recipes/qwen_ja_det.json \
+  --prompts /content/examples/prompts_ja.txt \
+  --out /content/outputs/synthetic.csv \
+  --report /content/outputs/report.json
+
+# 4) Preview outputs
+head -n 5 /content/outputs/synthetic.csv
+```
+
+- 重いモデルは Colab（GPU）で、ローカルは `recipes/mini_local.json` でスモークテストするのが推奨です。

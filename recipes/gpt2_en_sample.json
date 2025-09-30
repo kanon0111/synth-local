@@ -1,0 +1,10 @@
+{
+  "model": "distilgpt2",
+  "chat": false,
+  "max_new_tokens": 32,
+  "temperature": 0.7,
+  "top_p": 0.95,
+  "deterministic": false,
+  "lang": "en",
+  "n_per_prompt": 2
+}
